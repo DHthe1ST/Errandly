@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111827">
+<title>Errandly Admin</title>
+
+<style>
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#f3f4f6;
+  color:#111827;
+}
+
+.container{
+  width:min(100% - 32px,900px);
+  margin:auto;
+}
+
+header{
+  background:#111827;
+  color:white;
+  padding:20px 0;
+}
+
+.brand{
+  font-size:22px;
+  font-weight:700;
+}
+
+.brand span{
+  display:block;
+  font-size:12px;
+  font-weight:400;
+  opacity:.7;
+  margin-top:4px;
+}
+
+main{
+  padding:24px 0 50px;
+}
+
+.login-card,
+.dashboard{
+  background:white;
+  border-radius:18px;
+  padding:22px;
+  box-shadow:0 8px 30px rgba(0,0,0,.06);
+}
+
+h1,h2,h3{
+  margin-top:0;
+}
+
+.muted{
+  color:#6b7280;
+}
+
+label{
+  display:block;
+  font-weight:600;
+  margin:16px 0 7px;
+}
+
+input{
+  width:100%;
+  padding:14px;
+  border:1px solid #d1d5db;
+  border-radius:10px;
+  font-size:16px;
+}
+
+button{
+  border:0;
+  border-radius:10px;
+  padding:13px 18px;
+  font-size:15px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.primary{
+  width:100%;
+  margin-top:20px;
+  background:#111827;
+  color:white;
+}
+
+.logout{
+  background:white;
+  color:#111827;
+}
+
+.error{
+  color:#b91c1c;
+  margin-top:14px;
+}
+
+.hidden{
+  display:none;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:12px;
+  margin:20px 0;
+}
+
+.stat{
+  background:#f9fafb;
+  border-radius:14px;
+  padding:18px;
+}
+
+.stat strong{
+  display:block;
+  font-size:28px;
+  margin-bottom:5px;
+}
+
+.order{
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:16px;
+  margin-top:12px;
+}
+
+.order-top{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.status{
+  font-size:12px;
+  font-weight:700;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#fef3c7;
+}
+
+.order small{
+  display:block;
+  margin-top:7px;
+  color:#6b7280;
+}
+
+@media(min-width:600px){
+  .stats{
+    grid-template-columns:repeat(4,1fr);
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="container">
+<div class="brand">
+Errandly Admin
+<span>Operations Dashboard</span>
+</div>
+</div>
+</header>
+
+<main class="container">
+
+<section id="loginSection" class="login-card">
+<h1>Admin Login</h1>
+<p class="muted">Sign in to manage Errandly requests.</p>
+
+<form id="loginForm">
+
+<label for="email">Email</label>
+<input id="email" type="email" required autocomplete="email">
+
+<label for="password">Password</label>
+<input id="password" type="password" required autocomplete="current-password">
+
+<button class="primary" type="submit">Login</button>
+
+<p id="loginError" class="error"></p>
+
+</form>
+</section>
+
+<section id="dashboardSection" class="dashboard hidden">
+
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+<div>
+<h1>Dashboard</h1>
+<p class="muted">Manage incoming Errandly requests.</p>
+</div>
+
+<button id="logoutBtn" class="logout">Logout</button>
+</div>
+
+<div class="stats">
+
+<div class="stat">
+<strong id="pendingCount">0</strong>
+<span>Pending</span>
+</div>
+
+<div class="stat">
+<strong id="acceptedCount">0</strong>
+<span>Accepted</span>
+</div>
+
+<div class="stat">
+<strong id="progressCount">0</strong>
+<span>In Progress</span>
+</div>
+
+<div class="stat">
+<strong id="completedCount">0</strong>
+<span>Completed</span>
+</div>
+
+</div>
+
+<h2>Recent Requests</h2>
+
+<div id="ordersList">
+<p class="muted">Loading orders...</p>
+</div>
+
+</section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+
+const SUPABASE_URL="https://qcpsvndrmfujpvrgopds.supabase.co";
+
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_gFMSC4gbtpEbFFM7uaIV2A_Uz54B3pc";
+
+const supabaseClient=window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+const loginSection=document.getElementById("loginSection");
+const dashboardSection=document.getElementById("dashboardSection");
+const loginForm=document.getElementById("loginForm");
+const loginError=document.getElementById("loginError");
+
+loginForm.addEventListener("submit",async e=>{
+
+  e.preventDefault();
+
+  loginError.textContent="";
+
+  const email=document.getElementById("email").value.trim();
+  const password=document.getElementById("password").value;
+
+  const {error}=await supabaseClient.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if(error){
+    loginError.textContent="Login failed. Please check your email and password.";
+    return;
+  }
+
+  showDashboard();
+
+});
+
+async function checkSession(){
+
+  const {data}=await supabaseClient.auth.getSession();
+
+  if(data.session){
+    showDashboard();
+  }
+
+}
+
+async function showDashboard(){
+
+  loginSection.classList.add("hidden");
+  dashboardSection.classList.remove("hidden");
+
+  await loadOrders();
+
+}
+
+async function loadOrders(){
+
+  const ordersList=document.getElementById("ordersList");
+
+  const {data,error}=await supabaseClient
+    .from("errands")
+    .select("*")
+    .order("created_at",{ascending:false});
+
+  if(error){
+
+    ordersList.innerHTML=
+      `<p class="error">Unable to load orders.</p>`;
+
+    console.error(error);
+
+    return;
+
+  }
+
+  updateStats(data||[]);
+
+  if(!data||!data.length){
+
+    ordersList.innerHTML=
+      `<p class="muted">No errands have been submitted yet.</p>`;
+
+    return;
+
+  }
+
+  ordersList.innerHTML=data.map(order=>`
+
+    <div class="order">
+
+      <div class="order-top">
+
+        <strong>${escapeHtml(order.order_id||"No ID")}</strong>
+
+        <span class="status">
+          ${escapeHtml(order.status||"Pending")}
+        </span>
+
+      </div>
+
+      <small>
+        Type: ${escapeHtml(order.type||"")}
+      </small>
+
+      <small>
+        ${order.pickup_location
+          ? "Pickup: "+escapeHtml(order.pickup_location)
+          : "Location: "+escapeHtml(order.location||"")}
+      </small>
+
+      ${order.delivery_location
+        ? `<small>Delivery: ${escapeHtml(order.delivery_location)}</small>`
+        : ""}
+
+      <small>
+        Phone: ${escapeHtml(order.phone||"")}
+      </small>
+
+      <small>
+        ${escapeHtml(order.description||"")}
+      </small>
+
+    </div>
+
+  `).join("");
+
+}
+
+function updateStats(orders){
+
+  document.getElementById("pendingCount").textContent=
+    orders.filter(o=>o.status==="Pending").length;
+
+  document.getElementById("acceptedCount").textContent=
+    orders.filter(o=>o.status==="Accepted").length;
+
+  document.getElementById("progressCount").textContent=
+    orders.filter(o=>o.status==="In Progress").length;
+
+  document.getElementById("completedCount").textContent=
+    orders.filter(o=>o.status==="Completed").length;
+
+}
+
+document.getElementById("logoutBtn").onclick=async()=>{
+
+  await supabaseClient.auth.signOut();
+
+  dashboardSection.classList.add("hidden");
+  loginSection.classList.remove("hidden");
+
+};
+
+function escapeHtml(value){
+
+  return String(value).replace(/[&<>"']/g,c=>({
+
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#039;"
+
+  }[c]));
+
+}
+
+checkSession();
+
+</script>
+
+</body>
+  </html>
