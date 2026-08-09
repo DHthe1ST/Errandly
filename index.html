@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="Errandly — we move so you don't have to.">
+  <title>Errandly</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">E</div>
+        <div>
+          <strong>Errandly</strong>
+          <span>we move so you don't have to.</span>
+        </div>
+      </div>
+      <button class="icon-btn" id="historyBtn" aria-label="Order history">☰</button>
+    </header>
+
+    <main>
+      <section id="home" class="screen active">
+        <div class="hero">
+          <p class="eyebrow">YOUR EVERYDAY ERRAND PARTNER</p>
+          <h1>Need something<br><span>moved?</span></h1>
+          <p class="muted">Tell us what you need. Errandly helps you get it done without leaving your location.</p>
+          <button class="primary" id="startBtn">Request an Errand →</button>
+        </div>
+
+        <div class="quick-grid">
+          <div class="quick-card"><b>📦</b><span>Pickups</span></div>
+          <div class="quick-card"><b>📍</b><span>Deliveries</span></div>
+          <div class="quick-card"><b>🛍️</b><span>Shopping</span></div>
+          <div class="quick-card"><b>📄</b><span>Documents</span></div>
+        </div>
+      </section>
+
+      <section id="request" class="screen">
+        <button class="back" data-go="home">← Back</button>
+        <h2>Request an errand</h2>
+        <p class="muted">Give us the details and we'll take it from there.</p>
+
+        <form id="errandForm">
+          <label>What do you need?</label>
+          <textarea id="description" required placeholder="Example: Pick up a document from the office and deliver it to me."></textarea>
+
+          <label>Pickup location</label>
+          <input id="pickup" required placeholder="Where should we pick it up?">
+
+          <label>Delivery location</label>
+          <input id="dropoff" required placeholder="Where should we deliver it?">
+
+          <label>Your phone number</label>
+          <input id="phone" required type="tel" inputmode="tel" placeholder="08012345678">
+
+          <label>Preferred errand type</label>
+          <select id="type">
+            <option>Pickup / Delivery</option>
+            <option>Shopping</option>
+            <option>Document</option>
+            <option>Personal Errand</option>
+            <option>Other</option>
+          </select>
+
+          <button class="primary" type="submit">Submit Request</button>
+        </form>
+      </section>
+
+      <section id="confirmation" class="screen">
+        <div class="success-icon">✓</div>
+        <p class="eyebrow">REQUEST RECEIVED</p>
+        <h2>We're on it.</h2>
+        <p class="muted">Your Errandly request has been saved on this device.</p>
+
+        <div class="order-card">
+          <div><span>Order ID</span><strong id="orderId"></strong></div>
+          <div><span>Status</span><strong class="status">Pending</strong></div>
+          <div><span>Errand</span><strong id="summary"></strong></div>
+        </div>
+
+        <button class="primary" data-go="home">Back to Home</button>
+        <button class="secondary" id="viewHistoryBtn">View My Requests</button>
+      </section>
+
+      <section id="history" class="screen">
+        <button class="back" data-go="home">← Back</button>
+        <h2>My requests</h2>
+        <div id="historyList"></div>
+      </section>
+    </main>
+
+    <footer>Errandly MVP • Built for testing</footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
