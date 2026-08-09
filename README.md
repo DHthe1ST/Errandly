@@ -1,18 +1,20 @@
 # Errandly MVP
 
-A phone-friendly, installable PWA prototype for Errandly.
+Phone-friendly PWA prototype for Errandly.
 
-## What it currently does
+## Current features
 - Home screen
-- Errand request form
+- Request an errand
+- Schedule an errand for a future date/time
+- Pickup and Delivery route fields only for Pickup/Delivery errand types
+- Normal errands use a single Errand location
 - Generates an order ID
 - Saves requests locally on the device
 - Order history
+- Upcoming scheduled errand preview
 - Installable as a PWA on supported Android browsers
 
 ## Deploy on Vercel
-1. Upload these files to a GitHub repository.
-2. Import the repository into Vercel.
-3. Deploy. No build command is required.
+Push these files to the connected GitHub repository and let Vercel deploy the `main` branch.
 
-This is an MVP prototype. It does not yet include a real backend, payments, maps, rider assignment, authentication, or live tracking.
+This is still an MVP prototype. It does not yet include a real backend, payments, maps, rider assignment, authentication, or live tracking.
