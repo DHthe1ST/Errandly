@@ -1,3 +1,11 @@
+const SUPABASE_URL = "https://qcpsvndrmfujpvrgopds.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gFMSC4gbtpEbFFM7uaIV2A_Uz54B3pc";
+
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
 const screens=["home","request","confirmation","history"];
 let formMode="request";
 
@@ -75,6 +83,29 @@ function saveOrder(order){
   localStorage.setItem("errandly_orders",JSON.stringify(orders));
 }
 
+async function saveOrderOnline(order){
+  const { error } = await supabaseClient
+    .from("errands")
+    .insert({
+      order_id: order.id,
+      description: order.description,
+      type: order.type,
+      phone: order.phone,
+      location: order.location || null,
+      pickup_location: order.pickupLocation || null,
+      delivery_location: order.deliveryLocation || null,
+      scheduled_date: order.scheduledDate || null,
+      scheduled_time: order.scheduledTime || null,
+      mode: order.mode,
+      status: order.status
+    });
+
+  if(error){
+    console.error("Supabase error:", error);
+    throw error;
+  }
+}
+
 function formatSchedule(date,time){
   if(!date||!time) return "";
   const dt=new Date(`${date}T${time}`);
@@ -84,8 +115,12 @@ function formatSchedule(date,time){
   });
 }
 
-document.getElementById("errandForm").addEventListener("submit",e=>{
+document.getElementById("errandForm").addEventListener("submit",async e=>{
   e.preventDefault();
+
+  const submitBtn=document.getElementById("submitBtn");
+  submitBtn.disabled=true;
+  submitBtn.textContent="Submitting...";
 
   const type=document.getElementById("type").value;
   const route=["Pickup","Delivery"].includes(type);
@@ -109,32 +144,46 @@ document.getElementById("errandForm").addEventListener("submit",e=>{
     createdAt:new Date().toLocaleString()
   };
 
-  saveOrder(order);
+  try{
+    await saveOrderOnline(order);
 
-  document.getElementById("orderId").textContent=order.id;
-  document.getElementById("summary").textContent=order.type;
+    saveOrder(order);
 
-  const routeOrder=["Pickup","Delivery"].includes(order.type);
-  document.getElementById("summaryNormalLocationRow").hidden=routeOrder;
-  document.getElementById("summaryPickupRow").hidden=!routeOrder;
-  document.getElementById("summaryDeliveryRow").hidden=!routeOrder;
-  document.getElementById("summaryScheduleRow").hidden=!scheduled;
+    document.getElementById("orderId").textContent=order.id;
+    document.getElementById("summary").textContent=order.type;
 
-  document.getElementById("summaryLocation").textContent=order.location;
-  document.getElementById("summaryPickup").textContent=order.pickupLocation;
-  document.getElementById("summaryDelivery").textContent=order.deliveryLocation;
-  document.getElementById("summarySchedule").textContent=order.scheduledFor;
+    const routeOrder=["Pickup","Delivery"].includes(order.type);
+    document.getElementById("summaryNormalLocationRow").hidden=routeOrder;
+    document.getElementById("summaryPickupRow").hidden=!routeOrder;
+    document.getElementById("summaryDeliveryRow").hidden=!routeOrder;
+    document.getElementById("summaryScheduleRow").hidden=!scheduled;
 
-  document.getElementById("confirmationEyebrow").textContent=scheduled?"ERRAND SCHEDULED":"REQUEST RECEIVED";
-  document.getElementById("confirmationTitle").textContent=scheduled?"You're all set.":"We're on it.";
-  document.getElementById("confirmationText").textContent=scheduled
-    ?"Your scheduled errand has been saved on this device."
-    :"Your Errandly request has been saved on this device.";
+    document.getElementById("summaryLocation").textContent=order.location;
+    document.getElementById("summaryPickup").textContent=order.pickupLocation;
+    document.getElementById("summaryDelivery").textContent=order.deliveryLocation;
+    document.getElementById("summarySchedule").textContent=order.scheduledFor;
 
-  e.target.reset();
-  setFormMode("request");
-  updateLocationFields();
-  show("confirmation");
+    document.getElementById("confirmationEyebrow").textContent=scheduled?"ERRAND SCHEDULED":"REQUEST RECEIVED";
+    document.getElementById("confirmationTitle").textContent=scheduled?"You're all set.":"We're on it.";
+    document.getElementById("confirmationText").textContent=scheduled
+      ?"Your scheduled errand has been submitted successfully."
+      :"Your Errandly request has been submitted successfully.";
+
+    e.target.reset();
+    setFormMode("request");
+    updateLocationFields();
+    show("confirmation");
+
+  }catch(error){
+
+    alert("We couldn't submit your errand right now. Please check your internet connection and try again.");
+
+  }finally{
+
+    submitBtn.disabled=false;
+    submitBtn.textContent=formMode==="schedule"?"Schedule Errand":"Submit Request";
+
+  }
 });
 
 function renderHistory(){
@@ -171,6 +220,7 @@ function renderUpcomingHome(){
   }
 
   const next=scheduled[0];
+
   box.innerHTML=`
     <div class="upcoming-card">
       <div>
@@ -181,12 +231,17 @@ function renderUpcomingHome(){
       <button class="mini-btn" id="upcomingBtn">View</button>
     </div>
   `;
+
   document.getElementById("upcomingBtn").onclick=()=>show("history");
 }
 
 function escapeHtml(value){
   return String(value).replace(/[&<>"']/g,c=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#039;"
   }[c]));
 }
 
@@ -194,4 +249,4 @@ renderUpcomingHome();
 
 if("serviceWorker"in navigator){
   window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
-}
+    }
