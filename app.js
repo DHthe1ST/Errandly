@@ -85,16 +85,6 @@ document.querySelectorAll("[data-go]").forEach(btn=>btn.onclick=()=>{
 document.getElementById("historyBtn").onclick=()=>show("history");
 document.getElementById("viewHistoryBtn").onclick=()=>show("history");
 
-function getOrders(){
-  return JSON.parse(localStorage.getItem("errandly_orders")||"[]");
-}
-
-function saveOrder(order){
-  const orders=getOrders();
-  orders.unshift(order);
-  localStorage.setItem("errandly_orders",JSON.stringify(orders));
-}
-
 async function saveOrderOnline(order){
   const { data: sessionData } = await supabaseClient.auth.getSession();
   const user = sessionData?.session?.user;
@@ -160,8 +150,6 @@ document.getElementById("errandForm").addEventListener("submit",async e=>{
   try{
     await saveOrderOnline(order);
 
-    saveOrder(order);
-
     document.getElementById("orderId").textContent=order.id;
     document.getElementById("summary").textContent=order.type;
 
@@ -199,53 +187,85 @@ document.getElementById("errandForm").addEventListener("submit",async e=>{
   }
 });
 
-function renderHistory(){
-  const list=document.getElementById("historyList"),orders=getOrders();
-
-  if(!orders.length){
-    list.innerHTML='<p class="muted">No requests yet. Your Errandly orders will appear here.</p>';
-    return;
-  }
-
-  list.innerHTML=orders.map(o=>`
-    <div class="history-item">
-      <div class="row">
-        <strong>${escapeHtml(o.id)}</strong>
-        <strong class="status">${escapeHtml(o.status)}</strong>
-      </div>
-      <small>${escapeHtml(o.type)} • ${escapeHtml(o.mode||"Now")} • ${escapeHtml(o.createdAt)}</small>
-      ${o.scheduledFor?`<small>Scheduled for: ${escapeHtml(o.scheduledFor)}</small>`:""}
-      ${o.pickupLocation&&o.deliveryLocation
-        ?`<small>Pickup: ${escapeHtml(o.pickupLocation)}</small><small>Delivery: ${escapeHtml(o.deliveryLocation)}</small>`
-        :`<small>Location: ${escapeHtml(o.location)}</small>`}
-      <small>${escapeHtml(o.description)}</small>
-    </div>
-  `).join("");
+async function getCurrentCustomerOrders(){
+  const {data:sessionData,error:sessionError}=await supabaseClient.auth.getSession();
+  if(sessionError) throw sessionError;
+  const user=sessionData?.session?.user;
+  if(!user) return [];
+  const {data,error}=await supabaseClient
+    .from("errands")
+    .select("*")
+    .eq("customer_id",user.id)
+    .order("created_at",{ascending:false});
+  if(error) throw error;
+  return data||[];
 }
 
-function renderUpcomingHome(){
-  const box=document.getElementById("upcomingHome");
-  const scheduled=getOrders().filter(o=>o.mode==="Scheduled" && o.status==="Pending");
-
-  if(!scheduled.length){
-    box.innerHTML="";
-    return;
-  }
-
-  const next=scheduled[0];
-
-  box.innerHTML=`
-    <div class="upcoming-card">
-      <div>
-        <p class="eyebrow">UPCOMING ERRAND</p>
-        <strong>${escapeHtml(next.type)}</strong>
-        <small>${escapeHtml(next.scheduledFor||"Scheduled")}</small>
+async function renderHistory(){
+  const list=document.getElementById("historyList");
+  list.innerHTML='<p class="muted">Loading your requests...</p>';
+  try{
+    const {data:sessionData}=await supabaseClient.auth.getSession();
+    if(!sessionData?.session){
+      list.innerHTML='<p class="muted">Please log in to view your requests.</p>';
+      return;
+    }
+    const orders=await getCurrentCustomerOrders();
+    if(!orders.length){
+      list.innerHTML='<p class="muted">No requests yet. Your Errandly orders will appear here.</p>';
+      return;
+    }
+    list.innerHTML=orders.map(o=>`
+      <div class="history-item">
+        <div class="row">
+          <strong>${escapeHtml(o.order_id)}</strong>
+          <strong class="status">${escapeHtml(o.status||"Pending")}</strong>
+        </div>
+        <small>${escapeHtml(o.type||"General Errand")} • ${escapeHtml(o.mode||"Now")} • ${escapeHtml(o.created_at||"")}</small>
+        ${o.scheduled_date&&o.scheduled_time?`<small>Scheduled for: ${escapeHtml(formatSchedule(o.scheduled_date,o.scheduled_time))}</small>`:""}
+        ${o.pickup_location&&o.delivery_location
+          ?`<small>Pickup: ${escapeHtml(o.pickup_location)}</small><small>Delivery: ${escapeHtml(o.delivery_location)}</small>`
+          :`<small>Location: ${escapeHtml(o.location||"")}</small>`}
+        <small>${escapeHtml(o.description||"")}</small>
       </div>
-      <button class="mini-btn" id="upcomingBtn">View</button>
-    </div>
-  `;
+    `).join("");
+  }catch(error){
+    console.error(error);
+    list.innerHTML='<p class="error">Your requests could not be loaded. Please refresh and try again.</p>';
+  }
+}
 
-  document.getElementById("upcomingBtn").onclick=()=>show("history");
+async function renderUpcomingHome(){
+  const box=document.getElementById("upcomingHome");
+  try{
+    const orders=await getCurrentCustomerOrders();
+    const now=Date.now();
+    const scheduled=orders
+      .filter(o=>o.mode==="Scheduled" && o.status==="Pending" && o.scheduled_date && o.scheduled_time)
+      .map(o=>({...o,_when:new Date(`${o.scheduled_date}T${o.scheduled_time}`).getTime()}))
+      .filter(o=>Number.isFinite(o._when) && o._when>=now)
+      .sort((a,b)=>a._when-b._when);
+
+    if(!scheduled.length){
+      box.innerHTML="";
+      return;
+    }
+    const next=scheduled[0];
+    box.innerHTML=`
+      <div class="upcoming-card">
+        <div>
+          <p class="eyebrow">UPCOMING ERRAND</p>
+          <strong>${escapeHtml(next.type||"General Errand")}</strong>
+          <small>${escapeHtml(formatSchedule(next.scheduled_date,next.scheduled_time)||"Scheduled")}</small>
+        </div>
+        <button class="mini-btn" id="upcomingBtn">View</button>
+      </div>
+    `;
+    document.getElementById("upcomingBtn").onclick=()=>show("history");
+  }catch(error){
+    console.error(error);
+    box.innerHTML="";
+  }
 }
 
 function escapeHtml(value){
