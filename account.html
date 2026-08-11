@@ -3,13 +3,175 @@
 <section id="auth" class="card"><h1 id="title">My Account</h1><p class="muted" id="intro">Create an account or sign in to manage your errands.</p><form id="form"><div id="nameWrap" class="hidden"><label>Full name</label><input id="name"></div><label>Email</label><input id="email" type="email" required autocomplete="email"><label>Password</label><input id="password" type="password" required minlength="6" autocomplete="current-password"><button class="primary" id="submit">Login</button></form><p id="error" class="error"></p><button class="secondary" id="toggle">Create an account</button></section>
 <section id="portal" class="hidden"><div class="top"><div><h1>My Errands</h1><p class="muted" id="welcome"></p></div><button id="logout" class="secondary">Logout</button></div><div id="orders"><p class="muted">Loading...</p></div></section>
 <dialog id="editDialog"><form method="dialog" class="card" style="margin:0"><h2>Edit errand</h2><label>Description</label><textarea id="editDescription"></textarea><label>Phone</label><input id="editPhone"><label>Location</label><input id="editLocation"><label>Pickup location</label><input id="editPickup"><label>Delivery location</label><input id="editDelivery"><p id="editError" class="error"></p><div class="actions"><button id="saveEdit" class="primary" type="button">Save changes</button><button class="secondary" type="button" id="closeEdit">Close</button></div></form></dialog>
-</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://unpkg.com/@supabase/supabase-js@2"></script><script>
-const URL="https://qcpsvndrmfujpvrgopds.supabase.co",KEY="sb_publishable_gFMSC4gbtpEbFFM7uaIV2A_Uz54B3pc";const sb=window.supabase.createClient(URL,KEY);let signup=false,selected=null;
-const $=id=>document.getElementById(id);const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-$("toggle").onclick=()=>{signup=!signup;$("nameWrap").classList.toggle("hidden",!signup);$("title").textContent=signup?"Create your account":"My Account";$("intro").textContent=signup?"Register to manage your Errandly orders.":"Create an account or sign in to manage your errands.";$("submit").textContent=signup?"Register":"Login";$("toggle").textContent=signup?"I already have an account":"Create an account";$("error").textContent=""};
-$("form").onsubmit=async e=>{e.preventDefault();$("error").textContent="";const email=$("email").value.trim(),password=$("password").value;if(signup){const {data,error}=await sb.auth.signUp({email,password,data:{full_name:$("name").value.trim()}});if(error){$("error").textContent=error.message;return}if(!data.session){$("error").textContent="Account created. Check your email if confirmation is enabled, then sign in.";return}}else{const {error}=await sb.auth.signInWithPassword({email,password});if(error){$("error").textContent=error.message;return}}showPortal()};
-async function showPortal(){const {data}=await sb.auth.getSession();if(!data.session){$("auth").classList.remove("hidden");$("portal").classList.add("hidden");return}$("auth").classList.add("hidden");$("portal").classList.remove("hidden");$("welcome").textContent=data.session.user.email;await loadOrders()}
-async function loadOrders(){const {data:userData}=await sb.auth.getUser();const uid=userData?.user?.id;if(!uid)return;const {data,error}=await sb.from("errands").select("*").eq("customer_id",uid).order("created_at",{ascending:false});if(error){$("orders").innerHTML='<p class="error">Orders could not be loaded. Apply the 0.6 database migration first.</p>';return}if(!data?.length){$("orders").innerHTML='<p class="muted">No errands yet. Use Request an Errand from the home page.</p>';return}$("orders").innerHTML=data.map(o=>{const locked=o.status==="Cancelled";return `<article class="order"><div class="top"><strong>${esc(o.order_id)}</strong><span class="status">${esc(o.status||"Pending")}</span></div><p>${esc(o.description)}</p><small class="muted">${esc(o.type||"")} · ${esc(o.mode||"Now")}</small><div class="notice">${o.runner_id?"A runner has been assigned. Customer cancellation is locked after runner assignment, but modification remains available.":o.status==="Cancelled"?"This order is cancelled.":"No runner assigned yet. You may modify or cancel this order."}</div>${!locked?`<div class="actions"><button class="secondary" data-edit="${esc(o.order_id)}">Modify</button>${!o.runner_id?`<button class="danger" data-cancel="${esc(o.order_id)}">Cancel</button>`:""}</div>`:""}</article>`}).join("");}
-$("orders").addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)return;const id=b.dataset.edit||b.dataset.cancel;if(!id)return;const {data}=await sb.from("errands").select("*").eq("order_id",id).single();if(!data)return;if(b.dataset.edit){selected=data;$("editDescription").value=data.description||"";$("editPhone").value=data.phone||"";$("editLocation").value=data.location||"";$("editPickup").value=data.pickup_location||"";$("editDelivery").value=data.delivery_location||"";$("editError").textContent="";$("editDialog").showModal()}else if(confirm("Cancel this errand?")){const {error}=await sb.from("errands").update({status:"Cancelled"}).eq("order_id",id);if(error)alert(error.message);else await loadOrders()}});
-$("saveEdit").onclick=async()=>{if(!selected)return;const patch={description:$("editDescription").value.trim(),phone:$("editPhone").value.trim(),location:$("editLocation").value.trim()||null,pickup_location:$("editPickup").value.trim()||null,delivery_location:$("editDelivery").value.trim()||null};const {error}=await sb.from("errands").update(patch).eq("order_id",selected.order_id);if(error){$("editError").textContent=error.message;return}$("editDialog").close();await loadOrders()};$("closeEdit").onclick=()=>$("editDialog").close();$("logout").onclick=async()=>{await sb.auth.signOut();location.reload()};showPortal();
+</main><script>
+const SUPABASE_URL="https://qcpsvndrmfujpvrgopds.supabase.co";
+const SUPABASE_KEY="sb_publishable_gFMSC4gbtpEbFFM7uaIV2A_Uz54B3pc";
+let sb=null,signup=false,selected=null;
+
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+
+function setError(message){
+  $("error").textContent=message||"";
+}
+
+async function loadSupabase(){
+  if(window.supabase?.createClient) return window.supabase;
+
+  const loadScript=url=>new Promise((resolve,reject)=>{
+    const s=document.createElement("script");
+    s.src=url;
+    s.onload=()=>window.supabase?.createClient?resolve(window.supabase):reject(new Error("Supabase loaded but createClient is unavailable."));
+    s.onerror=()=>reject(new Error("Could not load "+url));
+    document.head.appendChild(s);
+  });
+
+  try{
+    return await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
+  }catch(e1){
+    try{
+      const mod=await import("https://esm.sh/@supabase/supabase-js@2");
+      if(mod?.createClient) return mod;
+      throw new Error("Supabase module loaded without createClient.");
+    }catch(e2){
+      throw new Error("Errandly could not load its authentication service. Please check your internet connection and refresh the page.");
+    }
+  }
+}
+
+async function initAuth(){
+  try{
+    const api=await loadSupabase();
+    sb=api.createClient(SUPABASE_URL,SUPABASE_KEY);
+    wireAuth();
+    await showPortal();
+  }catch(err){
+    console.error(err);
+    setError(err.message||"Authentication could not be initialized.");
+    $("submit").disabled=true;
+    $("toggle").disabled=true;
+  }
+}
+
+function wireAuth(){
+  $("toggle").onclick=()=>{
+    signup=!signup;
+    $("nameWrap").classList.toggle("hidden",!signup);
+    $("title").textContent=signup?"Create your account":"My Account";
+    $("intro").textContent=signup?"Register to manage your Errandly orders.":"Create an account or sign in to manage your errands.";
+    $("submit").textContent=signup?"Register":"Login";
+    $("toggle").textContent=signup?"I already have an account":"Create an account";
+    $("error").textContent="";
+    $("password").autocomplete=signup?"new-password":"current-password";
+  };
+
+  $("form").onsubmit=async e=>{
+    e.preventDefault();
+    setError("");
+    $("submit").disabled=true;
+    $("submit").textContent=signup?"Creating account...":"Signing in...";
+
+    try{
+      const email=$("email").value.trim();
+      const password=$("password").value;
+
+      if(signup){
+        const name=$("name").value.trim();
+        if(!name){setError("Please enter your full name.");return}
+        const {data,error}=await sb.auth.signUp({
+          email,password,
+          options:{data:{full_name:name}}
+        });
+        if(error){setError(error.message);return}
+        if(!data.session){
+          setError("Account created successfully. If email confirmation is enabled, check your email before signing in.");
+          signup=false;
+          $("nameWrap").classList.add("hidden");
+          $("title").textContent="My Account";
+          $("intro").textContent="Create an account or sign in to manage your errands.";
+          $("submit").textContent="Login";
+          $("toggle").textContent="Create an account";
+          return;
+        }
+      }else{
+        const {error}=await sb.auth.signInWithPassword({email,password});
+        if(error){setError(error.message);return}
+      }
+      await showPortal();
+    }catch(err){
+      console.error(err);
+      setError(err.message||"Something went wrong. Please try again.");
+    }finally{
+      $("submit").disabled=false;
+      if(!$("submit").textContent.startsWith("Login") && !$("submit").textContent.startsWith("Register")){
+        $("submit").textContent=signup?"Register":"Login";
+      }
+    }
+  };
+}
+
+async function showPortal(){
+  const {data,error}=await sb.auth.getSession();
+  if(error){setError(error.message);return}
+  if(!data.session){
+    $("auth").classList.remove("hidden");
+    $("portal").classList.add("hidden");
+    return;
+  }
+  $("auth").classList.add("hidden");
+  $("portal").classList.remove("hidden");
+  $("welcome").textContent=data.session.user.email;
+  await loadOrders();
+}
+
+async function loadOrders(){
+  const {data:userData}=await sb.auth.getUser();
+  const uid=userData?.user?.id;
+  if(!uid)return;
+  const {data,error}=await sb.from("errands").select("*").eq("customer_id",uid).order("created_at",{ascending:false});
+  if(error){$("orders").innerHTML='<p class="error">Orders could not be loaded. Apply the 0.6 database migration first.</p>';return}
+  if(!data?.length){$("orders").innerHTML='<p class="muted">No errands yet. Use Request an Errand from the home page.</p>';return}
+  $("orders").innerHTML=data.map(o=>{
+    const locked=o.status==="Cancelled";
+    return `<article class="order"><div class="top"><strong>${esc(o.order_id)}</strong><span class="status">${esc(o.status||"Pending")}</span></div><p>${esc(o.description)}</p><small class="muted">${esc(o.type||"")} · ${esc(o.mode||"Now")}</small><div class="notice">${o.runner_id?"A runner has been assigned. Customer cancellation is locked after runner assignment, but modification remains available.":o.status==="Cancelled"?"This order is cancelled.":"No runner assigned yet. You may modify or cancel this order."}</div>${!locked?`<div class="actions"><button class="secondary" data-edit="${esc(o.order_id)}">Modify</button>${!o.runner_id?`<button class="danger" data-cancel="${esc(o.order_id)}">Cancel</button>`:""}</div>`:""}</article>`
+  }).join("");
+}
+
+$("orders").addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b)return;
+  const id=b.dataset.edit||b.dataset.cancel; if(!id)return;
+  const {data}=await sb.from("errands").select("*").eq("order_id",id).single(); if(!data)return;
+  if(b.dataset.edit){
+    selected=data;
+    $("editDescription").value=data.description||"";
+    $("editPhone").value=data.phone||"";
+    $("editLocation").value=data.location||"";
+    $("editPickup").value=data.pickup_location||"";
+    $("editDelivery").value=data.delivery_location||"";
+    $("editError").textContent="";
+    $("editDialog").showModal();
+  }else if(confirm("Cancel this errand?")){
+    const {error}=await sb.from("errands").update({status:"Cancelled"}).eq("order_id",id);
+    if(error)alert(error.message); else await loadOrders();
+  }
+});
+
+$("saveEdit").onclick=async()=>{
+  if(!selected)return;
+  const patch={
+    description:$("editDescription").value.trim(),
+    phone:$("editPhone").value.trim(),
+    location:$("editLocation").value.trim()||null,
+    pickup_location:$("editPickup").value.trim()||null,
+    delivery_location:$("editDelivery").value.trim()||null
+  };
+  const {error}=await sb.from("errands").update(patch).eq("order_id",selected.order_id);
+  if(error){$("editError").textContent=error.message;return}
+  $("editDialog").close(); await loadOrders();
+};
+
+$("closeEdit").onclick=()=>$("editDialog").close();
+$("logout").onclick=async()=>{await sb.auth.signOut();location.reload()};
+
+initAuth();
 </script></body></html>
