@@ -29,14 +29,26 @@ function setFormMode(mode){
   document.getElementById("submitBtn").textContent=scheduled?"Schedule Errand":"Submit Request";
 }
 
-function openRequest(type="General Errand"){
+async function requireCustomer(){
+  const {data}=await supabaseClient.auth.getSession();
+  if(!data.session){
+    alert("Please log in or create an Errandly account before submitting an order.");
+    window.location.href="account.html";
+    return false;
+  }
+  return true;
+}
+
+async function openRequest(type="General Errand"){
+  if(!(await requireCustomer())) return;
   setFormMode("request");
   document.getElementById("type").value=type;
   updateLocationFields();
   show("request");
 }
 
-function openSchedule(){
+async function openSchedule(){
+  if(!(await requireCustomer())) return;
   setFormMode("schedule");
   document.getElementById("type").value="General Errand";
   const d=new Date();
@@ -84,26 +96,27 @@ function saveOrder(order){
 }
 
 async function saveOrderOnline(order){
-  const { error } = await supabaseClient
-    .from("errands")
-    .insert({
-      order_id: order.id,
-      description: order.description,
-      type: order.type,
-      phone: order.phone,
-      location: order.location || null,
-      pickup_location: order.pickupLocation || null,
-      delivery_location: order.deliveryLocation || null,
-      scheduled_date: order.scheduledDate || null,
-      scheduled_time: order.scheduledTime || null,
-      mode: order.mode,
-      status: order.status
-    });
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  const user = sessionData?.session?.user;
+  if(!user) throw new Error("Authentication required");
 
-  if(error){
-    console.error("Supabase error:", error);
-    throw error;
-  }
+  const payload = {
+    order_id: order.id,
+    customer_id: user.id,
+    description: order.description,
+    type: order.type,
+    phone: order.phone,
+    location: order.location || null,
+    pickup_location: order.pickupLocation || null,
+    delivery_location: order.deliveryLocation || null,
+    scheduled_date: order.scheduledDate || null,
+    scheduled_time: order.scheduledTime || null,
+    mode: order.mode,
+    status: "Pending"
+  };
+
+  const { error } = await supabaseClient.from("errands").insert(payload);
+  if(error) throw error;
 }
 
 function formatSchedule(date,time){
